@@ -388,11 +388,12 @@ npm run lint
 npm run typecheck
 ```
 
-126 tests cover password hashing, signup and login, session lifecycle, username
+155 tests cover password hashing, signup and login, session lifecycle, username
 rules, pairing-code issue/redeem/expiry, agent API authentication and
 revocation, publishing, the weekly limit (including the concurrent case),
 duplicate detection, moderation, admin approve/reject/unpublish/feature, weekly
-awards, engagement counters, and payload validation.
+awards, engagement counters, payload validation, and every query behind the
+public pages.
 
 They run against a real PostgreSQL database — nothing is mocked. Override the
 connection with `TEST_DATABASE_URL` if you need to.
