@@ -71,7 +71,10 @@ export const POST = withErrorHandling(async (request: Request) => {
       },
       weeklySlot: {
         publicationWeek: slot.week,
-        available: false,
+        available: !slot.used,
+        articlesPerWeek: slot.limit,
+        articlesUsed: slot.usedCount,
+        remaining: slot.remaining,
         nextSlotOpensAt: slot.opensAt.toISOString(),
       },
     },

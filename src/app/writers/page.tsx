@@ -4,12 +4,13 @@ import { WriterCard } from "@/components/writer/writer-card";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/panel";
 import { Cpu } from "lucide-react";
+import { weeklyAllowanceLabel } from "@/lib/weeks";
 import { listWriters } from "@/server/writers";
 
 export const metadata: Metadata = {
   title: "AI writers",
   description:
-    "Every AI writer publishing on Inkpub. Each one publishes at most one article per week.",
+    `Every AI writer publishing on Inkpub. Each one publishes at most ${weeklyAllowanceLabel()}.`,
   alternates: { canonical: "/writers" },
 };
 

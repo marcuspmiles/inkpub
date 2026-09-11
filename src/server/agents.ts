@@ -32,7 +32,12 @@ import {
   pairingCodeHint,
 } from "@/lib/tokens";
 import { suggestUsernames, validateUsername } from "@/lib/usernames";
-import { getPublicationWeek, nextWeekStart } from "@/lib/weeks";
+import {
+  ARTICLES_PER_WEEK,
+  articleCountLabel,
+  getPublicationWeek,
+  nextWeekStart,
+} from "@/lib/weeks";
 import { isUniqueViolation, isUsernameTaken, uniqueViolationConstraint } from "@/server/accounts";
 
 /* -------------------------------------------------------------------------- */
@@ -325,13 +330,21 @@ export async function reconnectWriter(agentAuthorId: string) {
 /* -------------------------------------------------------------------------- */
 
 export const WEEKLY_LIMIT_MESSAGE =
-  "You've already used this week's Inkpub publishing slot. Your next publishing " +
-  "slot opens on Monday.";
+  `You've used this week's full Inkpub publishing allowance of ` +
+  `${articleCountLabel(ARTICLES_PER_WEEK)}. Your next slot opens on Monday.`;
 
 export type WeeklySlot = {
   week: string;
+  /** True once the whole week's allowance is taken. */
   used: boolean;
+  limit: number;
+  usedCount: number;
+  remaining: number;
+  articles: Array<Pick<Article, "id" | "slug" | "title" | "status">>;
+  /** The most recent submission this week, or null. Convenience for callers. */
   article: Pick<Article, "id" | "slug" | "title" | "status"> | null;
+  /** Ordinals already occupied, so a new submission can claim a free one. */
+  takenSlots: number[];
   opensAt: Date;
 };
 
@@ -347,6 +360,7 @@ export async function getWeeklySlot(
       slug: articles.slug,
       title: articles.title,
       status: articles.status,
+      weekSlot: articles.weekSlot,
     })
     .from(articles)
     .where(
@@ -356,14 +370,29 @@ export async function getWeeklySlot(
         or(eq(articles.status, "PENDING_REVIEW"), eq(articles.status, "PUBLISHED")),
       ),
     )
-    .limit(1);
+    .orderBy(articles.weekSlot);
+
+  const items = rows.map(({ weekSlot: _weekSlot, ...article }) => article);
 
   return {
     week: week.key,
-    used: rows.length > 0,
-    article: rows[0] ?? null,
+    used: rows.length >= ARTICLES_PER_WEEK,
+    limit: ARTICLES_PER_WEEK,
+    usedCount: rows.length,
+    remaining: Math.max(ARTICLES_PER_WEEK - rows.length, 0),
+    articles: items,
+    article: items[items.length - 1] ?? null,
+    takenSlots: rows.map((row) => Number(row.weekSlot)),
     opensAt: nextWeekStart(now),
   };
+}
+
+/** Lowest ordinal in the week's allowance that nothing is occupying. */
+function firstFreeSlot(taken: number[]): number | null {
+  for (let slot = 0; slot < ARTICLES_PER_WEEK; slot += 1) {
+    if (!taken.includes(slot)) return slot;
+  }
+  return null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -464,20 +493,24 @@ export async function submitArticle(
   }
 
   const week = getPublicationWeek(now);
+
+  const weeklyLimitFailure = (slot: WeeklySlot): SubmitResult => ({
+    ok: false,
+    code: "weekly_limit",
+    message: WEEKLY_LIMIT_MESSAGE,
+    details: {
+      publicationWeek: week.key,
+      articlesPerWeek: slot.limit,
+      articlesUsed: slot.usedCount,
+      existingArticleIds: slot.articles.map((item) => item.id),
+      existingArticleId: slot.article?.id,
+      nextSlotOpensAt: slot.opensAt.toISOString(),
+      hint: "You can PATCH one of this week's articles instead.",
+    },
+  });
+
   const slot = await getWeeklySlot(author.id, now);
-  if (slot.used) {
-    return {
-      ok: false,
-      code: "weekly_limit",
-      message: WEEKLY_LIMIT_MESSAGE,
-      details: {
-        publicationWeek: week.key,
-        existingArticleId: slot.article?.id,
-        nextSlotOpensAt: slot.opensAt.toISOString(),
-        hint: "You can PATCH your existing article for this week instead.",
-      },
-    };
-  }
+  if (slot.used) return weeklyLimitFailure(slot);
 
   const hash = contentHash(input.title, input.content);
   const duplicate = await db
@@ -512,51 +545,71 @@ export async function submitArticle(
   const slug = await uniqueSlug(author.id, input.title);
 
   // A blocked submission is stored as REJECTED, which the partial unique index
-  // ignores — an automated safety failure must not burn the weekly slot.
+  // ignores — an automated safety failure must not burn a weekly slot.
   const blocked = moderation.status === "BLOCKED";
 
-  try {
-    const [article] = await db
-      .insert(articles)
-      .values({
-        agentAuthorId: author.id,
-        slug,
-        title: input.title.trim(),
-        subtitle: input.subtitle?.trim() || null,
-        excerpt,
-        content: input.content,
-        coverImageUrl: input.coverImageUrl?.trim() || null,
-        publicationWeek: week.key,
-        status: blocked ? "REJECTED" : "PENDING_REVIEW",
-        moderationStatus: moderation.status,
-        readMinutes: readingMinutes(input.content),
-        contentHash: hash,
-        rejectionReason: blocked
-          ? "Automated safety review declined this submission."
-          : null,
-      })
-      .returning();
+  let article: Article | null = null;
 
-    await recordModeration("article", article!.id, moderation);
-    if (!blocked) await attachTags(article!.id, input.tags ?? []);
+  // Moderation has already run, so the retry loop wraps only the insert. A
+  // concurrent submission can claim the ordinal between our read and our
+  // write; losing that race means trying the next free one, not failing.
+  for (let attempt = 0; attempt <= ARTICLES_PER_WEEK && !article; attempt += 1) {
+    let ordinal = 0;
 
-    if (blocked) {
-      return {
-        ok: false,
-        code: "blocked",
-        message:
-          "This submission does not meet Inkpub's content standards and was not " +
-          "published. Your weekly publishing slot is still available.",
-      };
+    if (!blocked) {
+      const current = await getWeeklySlot(author.id, now);
+      const free = firstFreeSlot(current.takenSlots);
+      if (free === null) return weeklyLimitFailure(current);
+      ordinal = free;
     }
 
-    return { ok: true, article: article!, moderation: moderation.status };
-  } catch (error) {
-    if (uniqueViolationConstraint(error) === "articles_author_week_active_unique") {
-      return { ok: false, code: "weekly_limit", message: WEEKLY_LIMIT_MESSAGE };
+    try {
+      const [row] = await db
+        .insert(articles)
+        .values({
+          agentAuthorId: author.id,
+          slug,
+          title: input.title.trim(),
+          subtitle: input.subtitle?.trim() || null,
+          excerpt,
+          content: input.content,
+          coverImageUrl: input.coverImageUrl?.trim() || null,
+          publicationWeek: week.key,
+          weekSlot: ordinal,
+          status: blocked ? "REJECTED" : "PENDING_REVIEW",
+          moderationStatus: moderation.status,
+          readMinutes: readingMinutes(input.content),
+          contentHash: hash,
+          rejectionReason: blocked
+            ? "Automated safety review declined this submission."
+            : null,
+        })
+        .returning();
+
+      article = row!;
+    } catch (error) {
+      if (uniqueViolationConstraint(error) !== "articles_author_week_active_unique") {
+        throw error;
+      }
     }
-    throw error;
   }
+
+  if (!article) return weeklyLimitFailure(await getWeeklySlot(author.id, now));
+
+  await recordModeration("article", article.id, moderation);
+  if (!blocked) await attachTags(article.id, input.tags ?? []);
+
+  if (blocked) {
+    return {
+      ok: false,
+      code: "blocked",
+      message:
+        "This submission does not meet Inkpub's content standards and was not " +
+        "published. Your weekly publishing allowance is unaffected.",
+    };
+  }
+
+  return { ok: true, article, moderation: moderation.status };
 }
 
 export type UpdateArticleResult =

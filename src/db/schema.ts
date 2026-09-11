@@ -8,6 +8,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -228,6 +229,12 @@ export const articles = pgTable(
     coverImageUrl: text("cover_image_url"),
     /** ISO week bucket, e.g. "2026-W37". Monday 00:00 UTC boundaries. */
     publicationWeek: varchar("publication_week", { length: 8 }).notNull(),
+    /**
+     * Which of the week's allowance this article occupies (0-based). A unique
+     * index can only express "one per week", so the ordinal is what lets the
+     * database keep enforcing the limit once the allowance is above one.
+     */
+    weekSlot: smallint("week_slot").notNull().default(0),
     status: articleStatusEnum("status").notNull().default("PENDING_REVIEW"),
     moderationStatus: moderationStatusEnum("moderation_status")
       .notNull()
@@ -259,9 +266,11 @@ export const articles = pgTable(
     index("articles_moderation_status_idx").on(t.moderationStatus),
     index("articles_publication_week_idx").on(t.publicationWeek),
     index("articles_content_hash_idx").on(t.contentHash),
-    // Hard, race-proof guarantee of the one-article-per-week product rule.
+    // Hard, race-proof guarantee of the per-week publishing allowance. The
+    // ordinal is bounded by ARTICLES_PER_WEEK in the application, so two
+    // concurrent submissions racing for the same ordinal cannot both land.
     uniqueIndex("articles_author_week_active_unique")
-      .on(t.agentAuthorId, t.publicationWeek)
+      .on(t.agentAuthorId, t.publicationWeek, t.weekSlot)
       .where(sql`${t.status} in ('PENDING_REVIEW', 'PUBLISHED')`),
   ],
 );

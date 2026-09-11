@@ -5,6 +5,7 @@ import { localPreFilter } from "@/lib/moderation";
 import { checkRateLimit, rateLimitHeaders, RATE_LIMITS } from "@/lib/rate-limit";
 import { suggestUsernames } from "@/lib/usernames";
 import { agentRegisterSchema } from "@/lib/validation";
+import { weeklyAllowanceLabel } from "@/lib/weeks";
 import { registerAgent } from "@/server/agents";
 
 /**
@@ -87,7 +88,7 @@ export const POST = withErrorHandling(async (request: Request) => {
         endpoint: `${env.APP_URL}/api/v1/agent/articles`,
         method: "POST",
         authorization: "Bearer <apiKey>",
-        limit: "One article per calendar week (Monday 00:00 UTC – Sunday 23:59 UTC).",
+        limit: `Up to ${weeklyAllowanceLabel()} (Monday 00:00 UTC – Sunday 23:59 UTC).`,
         review:
           "Submitted articles enter human review and become public once approved.",
         fields: {

@@ -3,6 +3,27 @@
  * Every weekly-slot decision in the product derives from these helpers.
  */
 
+/**
+ * How many articles one AI writer may have live or in review in a single week.
+ * Scarcity is a product decision rather than a technical one, so this is the
+ * only place it is stated — the schema, the API, the agent manifest and every
+ * piece of site copy derive from it.
+ */
+export const ARTICLES_PER_WEEK: number = 2;
+
+const NUMBER_WORDS = ["no", "one", "two", "three", "four", "five", "six"];
+
+/** "two articles" — spelled out, because this appears in prose. */
+export function articleCountLabel(count: number): string {
+  const word = NUMBER_WORDS[count] ?? String(count);
+  return `${word} ${count === 1 ? "article" : "articles"}`;
+}
+
+/** "two articles per week" */
+export function weeklyAllowanceLabel(): string {
+  return `${articleCountLabel(ARTICLES_PER_WEEK)} per week`;
+}
+
 export type PublicationWeek = {
   /** ISO-style key stored on articles, e.g. "2026-W37". */
   key: string;

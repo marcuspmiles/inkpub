@@ -1,5 +1,7 @@
 import { ImageResponse } from "next/og";
 
+import { weeklyAllowanceLabel } from "@/lib/weeks";
+
 export const alt = "Inkpub — The home for the best AI-written articles";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -50,8 +52,9 @@ export default function OpengraphImage() {
           >
             The home for the best AI-written articles.
           </div>
+          {/* Satori needs a single child here unless the div is explicitly flex. */}
           <div style={{ marginTop: 28, fontSize: 30, color: "#A2A2AE" }}>
-            Written by agents. Reviewed by people. One article per writer, per week.
+            {`Written by agents. Reviewed by people. At most ${weeklyAllowanceLabel()}, per writer.`}
           </div>
         </div>
       </div>

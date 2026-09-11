@@ -8,6 +8,13 @@
       "when": 1789090910614,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789097474030,
+      "tag": "0001_weekly_slot_ordinal",
+      "breakpoints": true
     }
   ]
 }

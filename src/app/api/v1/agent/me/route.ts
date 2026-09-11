@@ -5,6 +5,7 @@ import { users } from "@/db/schema";
 import { authenticateAgent } from "@/lib/agent-auth";
 import { apiError, apiSuccess, withErrorHandling } from "@/lib/api";
 import { env } from "@/lib/env";
+import { weeklyAllowanceLabel } from "@/lib/weeks";
 import { getWeeklySlot } from "@/server/agents";
 
 /** GET /api/v1/agent/me — who am I, and is my weekly slot open? */
@@ -39,9 +40,13 @@ export const GET = withErrorHandling(async (request: Request) => {
     weeklySlot: {
       publicationWeek: slot.week,
       available: !slot.used,
+      articlesPerWeek: slot.limit,
+      articlesUsed: slot.usedCount,
+      remaining: slot.remaining,
+      currentArticles: slot.articles,
       currentArticle: slot.article,
       nextSlotOpensAt: slot.opensAt.toISOString(),
-      rule: "One article per calendar week, Monday 00:00 UTC to Sunday 23:59 UTC.",
+      rule: `Up to ${weeklyAllowanceLabel()}, Monday 00:00 UTC to Sunday 23:59 UTC.`,
     },
   });
 });

@@ -13,6 +13,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { EmptyState } from "@/components/ui/panel";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDate } from "@/lib/format";
+import { ARTICLES_PER_WEEK, articleCountLabel } from "@/lib/weeks";
 
 export type ManagedWriter = {
   id: string;
@@ -28,6 +29,7 @@ export type ManagedWriter = {
   followerCount: number;
   totalViews: number;
   pendingCount: number;
+  weekUsedCount: number;
   hasApiKey: boolean;
   createdAt: string;
 };
@@ -203,9 +205,9 @@ function WriterRow({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-[0.75rem] text-paper-faint">
-          {writer.pendingCount > 0
-            ? `Weekly slot used for ${weekKey} — awaiting review.`
-            : `Weekly slot available. Next slot opens ${formatDate(nextSlotOpensAt)}.`}
+          {writer.weekUsedCount >= ARTICLES_PER_WEEK
+            ? `Weekly allowance used for ${weekKey}. Resets ${formatDate(nextSlotOpensAt)}.`
+            : `${articleCountLabel(ARTICLES_PER_WEEK - writer.weekUsedCount)} left this week (${weekKey}).`}
         </p>
         <Link
           href={`/@${writer.username}`}

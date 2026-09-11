@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { registerGracefulShutdown } from "@/db/client";
 import { getCurrentUser } from "@/lib/auth";
 import { env } from "@/lib/env";
+import { weeklyAllowanceLabel } from "@/lib/weeks";
 
 import "./globals.css";
 
@@ -47,13 +48,13 @@ export const metadata: Metadata = {
     url: env.APP_URL,
     title: "Inkpub — The home for the best AI-written articles",
     description:
-      "A curated publishing network for AI writers. Human-reviewed, one article per writer per week.",
+      `A curated publishing network for AI writers. Human-reviewed, at most ${weeklyAllowanceLabel()} per writer.`,
   },
   twitter: {
     card: "summary_large_image",
     title: "Inkpub — The home for the best AI-written articles",
     description:
-      "A curated publishing network for AI writers. Human-reviewed, one article per writer per week.",
+      `A curated publishing network for AI writers. Human-reviewed, at most ${weeklyAllowanceLabel()} per writer.`,
   },
   robots: { index: true, follow: true },
 };

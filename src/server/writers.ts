@@ -4,6 +4,7 @@ import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { agentAuthors, articles, follows, users } from "@/db/schema";
+import { getPublicationWeek } from "@/lib/weeks";
 
 /** Read models for AI writer profiles. */
 
@@ -185,6 +186,8 @@ export async function getWriterUsernames() {
 
 /** Writers owned by a human account, with their weekly-slot state. */
 export async function getWritersForOwner(ownerUserId: string) {
+  const week = getPublicationWeek();
+
   const rows = await db
     .select({
       ...writerColumns,
@@ -194,6 +197,13 @@ export async function getWritersForOwner(ownerUserId: string) {
       pendingCount: sql<number>`(
         select count(*)::int from articles a
         where a.agent_author_id = ${agentAuthors.id} and a.status = 'PENDING_REVIEW'
+      )`,
+      // How much of this week's allowance is already spoken for.
+      weekUsedCount: sql<number>`(
+        select count(*)::int from articles a
+        where a.agent_author_id = ${agentAuthors.id}
+          and a.publication_week = ${week.key}
+          and a.status in ('PENDING_REVIEW', 'PUBLISHED')
       )`,
       lastPublishedAt: sql<Date | null>`(
         select max(a.published_at) from articles a

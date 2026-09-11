@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { db } from "@/db/client";
 import { articleTags, articles, moderationResults } from "@/db/schema";
-import { getPublicationWeek } from "@/lib/weeks";
+import { ARTICLES_PER_WEEK, getPublicationWeek } from "@/lib/weeks";
 import { uniqueViolationConstraint } from "@/server/accounts";
 import {
   WEEKLY_LIMIT_MESSAGE,
@@ -87,39 +87,108 @@ describe("agent publishing", () => {
   });
 });
 
-describe("one article per writer per week", () => {
-  it("blocks the second submission in the same week", async () => {
+/** Spends the whole of one week's allowance. */
+async function fillAllowance(
+  author: Awaited<ReturnType<typeof writer>>["author"],
+  when: Date,
+) {
+  const results = [];
+  for (let index = 0; index < ARTICLES_PER_WEEK; index += 1) {
+    results.push(
+      await submitArticle(
+        author,
+        {
+          title: `Allowance Filler Number ${index + 1}`,
+          content: articleBody(`fill-${index}`),
+        },
+        when,
+      ),
+    );
+  }
+  return results;
+}
+
+describe("the weekly publishing allowance", () => {
+  it("lets a writer use every slot in the allowance", async () => {
     const { author } = await writer();
 
-    expect(
-      (await submitArticle(author, { title: "First Piece of the Week", content: articleBody("a") }, MONDAY)).ok,
-    ).toBe(true);
+    const filled = await fillAllowance(author, MONDAY);
 
-    const second = await submitArticle(
+    expect(filled).toHaveLength(ARTICLES_PER_WEEK);
+    expect(filled.every((result) => result.ok)).toBe(true);
+
+    const slot = await getWeeklySlot(author.id, MONDAY);
+    expect(slot.usedCount).toBe(ARTICLES_PER_WEEK);
+    expect(slot.remaining).toBe(0);
+    expect(slot.used).toBe(true);
+  });
+
+  it("counts down the remaining slots as they are used", async () => {
+    const { author } = await writer();
+
+    const before = await getWeeklySlot(author.id, MONDAY);
+    expect(before.remaining).toBe(ARTICLES_PER_WEEK);
+    expect(before.used).toBe(false);
+
+    await submitArticle(
       author,
-      { title: "Second Piece of the Week", content: articleBody("b") },
+      { title: "The Opening Piece Here", content: articleBody("a") },
+      MONDAY,
+    );
+
+    const after = await getWeeklySlot(author.id, MONDAY);
+    expect(after.usedCount).toBe(1);
+    expect(after.remaining).toBe(ARTICLES_PER_WEEK - 1);
+    // Only at capacity once the whole allowance is gone.
+    expect(after.used).toBe(ARTICLES_PER_WEEK === 1);
+  });
+
+  it("gives each article its own slot ordinal", async () => {
+    const { author } = await writer();
+    await fillAllowance(author, MONDAY);
+
+    const rows = await db
+      .select({ weekSlot: articles.weekSlot })
+      .from(articles)
+      .where(eq(articles.agentAuthorId, author.id));
+
+    const ordinals = rows.map((row) => Number(row.weekSlot)).sort();
+    expect(ordinals).toEqual(
+      Array.from({ length: ARTICLES_PER_WEEK }, (_, index) => index),
+    );
+  });
+
+  it("blocks the submission after the allowance is spent", async () => {
+    const { author } = await writer();
+    await fillAllowance(author, MONDAY);
+
+    const extra = await submitArticle(
+      author,
+      { title: "One Article Too Many", content: articleBody("extra") },
       FRIDAY,
     );
 
-    expect(second).toMatchObject({ ok: false, code: "weekly_limit" });
-    expect(second.ok === false && second.message).toBe(WEEKLY_LIMIT_MESSAGE);
+    expect(extra).toMatchObject({ ok: false, code: "weekly_limit" });
+    expect(extra.ok === false && extra.message).toBe(WEEKLY_LIMIT_MESSAGE);
   });
 
   it("tells the agent when the next slot opens and how to revise", async () => {
     const { author } = await writer();
-    await submitArticle(author, { title: "First Piece of the Week", content: articleBody("a") }, MONDAY);
+    await fillAllowance(author, MONDAY);
 
-    const second = await submitArticle(
+    const extra = await submitArticle(
       author,
-      { title: "Second Piece of the Week", content: articleBody("b") },
+      { title: "One Article Too Many", content: articleBody("extra") },
       FRIDAY,
     );
 
-    expect(second.ok).toBe(false);
-    if (second.ok) return;
+    expect(extra.ok).toBe(false);
+    if (extra.ok) return;
 
-    expect(second.details?.nextSlotOpensAt).toBe("2026-09-14T00:00:00.000Z");
-    expect(String(second.details?.hint)).toContain("PATCH");
+    expect(extra.details?.nextSlotOpensAt).toBe("2026-09-14T00:00:00.000Z");
+    expect(extra.details?.articlesPerWeek).toBe(ARTICLES_PER_WEEK);
+    expect(extra.details?.articlesUsed).toBe(ARTICLES_PER_WEEK);
+    expect(String(extra.details?.hint)).toContain("PATCH");
   });
 
   it("opens a fresh slot on Monday 00:00 UTC", async () => {
@@ -173,63 +242,89 @@ describe("one article per writer per week", () => {
   it("reports a lost race as a weekly limit rather than a server error", async () => {
     const { author } = await writer();
 
-    // Both submissions see an empty slot, then both try to insert.
-    const [first, second] = await Promise.all([
-      submitArticle(author, { title: "Concurrent Submission One", content: articleBody("one") }, FRIDAY),
-      submitArticle(author, { title: "Concurrent Submission Two", content: articleBody("two") }, FRIDAY),
-    ]);
+    // One more than the allowance, fired at once: every one of them sees a
+    // free slot before any of them writes.
+    const outcomes = await Promise.all(
+      Array.from({ length: ARTICLES_PER_WEEK + 1 }, (_, index) =>
+        submitArticle(
+          author,
+          {
+            title: `Concurrent Submission Number ${index + 1}`,
+            content: articleBody(`concurrent-${index}`),
+          },
+          FRIDAY,
+        ),
+      ),
+    );
 
-    const outcomes = [first, second];
-    expect(outcomes.filter((result) => result.ok)).toHaveLength(1);
+    expect(outcomes.filter((result) => result.ok)).toHaveLength(ARTICLES_PER_WEEK);
 
-    const loser = outcomes.find((result) => !result.ok);
-    expect(loser).toMatchObject({ ok: false, code: "weekly_limit" });
+    const losers = outcomes.filter((result) => !result.ok);
+    expect(losers).toHaveLength(1);
+    expect(losers[0]).toMatchObject({ ok: false, code: "weekly_limit" });
   });
 
-  it("frees the slot when the article is rejected", async () => {
+  it("hands a slot back when the article is rejected", async () => {
     const { author } = await writer();
+    const filled = await fillAllowance(author, FRIDAY);
 
-    const first = await submitArticle(author, { title: "A Rejected Submission", content: articleBody("a") }, FRIDAY);
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
+    const first = filled[0]!;
+    if (!first.ok) throw new Error("setup failed");
+
+    // At capacity before the rejection.
+    expect((await getWeeklySlot(author.id, FRIDAY)).used).toBe(true);
 
     await db
       .update(articles)
       .set({ status: "REJECTED" })
       .where(eq(articles.id, first.article.id));
 
-    expect((await getWeeklySlot(author.id, FRIDAY)).used).toBe(false);
+    const slot = await getWeeklySlot(author.id, FRIDAY);
+    expect(slot.used).toBe(false);
+    expect(slot.remaining).toBe(1);
+
     expect(
       (await submitArticle(author, { title: "The Revised Submission", content: articleBody("b") }, FRIDAY)).ok,
     ).toBe(true);
   });
 
-  it("frees the slot when an editor unpublishes", async () => {
+  it("hands a slot back when an editor unpublishes", async () => {
     const { author } = await writer();
-    const first = await submitArticle(author, { title: "An Unpublished Article", content: articleBody("a") }, FRIDAY);
+    const filled = await fillAllowance(author, FRIDAY);
+
+    const first = filled[0]!;
     if (!first.ok) throw new Error("setup failed");
+
+    expect((await getWeeklySlot(author.id, FRIDAY)).used).toBe(true);
 
     await db
       .update(articles)
       .set({ status: "UNPUBLISHED" })
       .where(eq(articles.id, first.article.id));
 
-    expect((await getWeeklySlot(author.id, FRIDAY)).used).toBe(false);
+    const slot = await getWeeklySlot(author.id, FRIDAY);
+    expect(slot.used).toBe(false);
+    expect(slot.remaining).toBe(1);
   });
 
-  it("reports the slot as used once the article is published", async () => {
+  it("reports the allowance as spent once the articles are published", async () => {
     const { author } = await writer();
-    const result = await submitArticle(author, { title: "A Published Article", content: articleBody("a") }, FRIDAY);
-    if (!result.ok) throw new Error("setup failed");
+    const filled = await fillAllowance(author, FRIDAY);
+
+    const ids = filled.flatMap((result) => (result.ok ? [result.article.id] : []));
+    expect(ids).toHaveLength(ARTICLES_PER_WEEK);
 
     await db
       .update(articles)
       .set({ status: "PUBLISHED", publishedAt: FRIDAY })
-      .where(eq(articles.id, result.article.id));
+      .where(inArray(articles.id, ids));
 
     const slot = await getWeeklySlot(author.id, FRIDAY);
     expect(slot.used).toBe(true);
-    expect(slot.article?.status).toBe("PUBLISHED");
+    expect(slot.usedCount).toBe(ARTICLES_PER_WEEK);
+    expect(slot.remaining).toBe(0);
+    expect(slot.articles).toHaveLength(ARTICLES_PER_WEEK);
+    expect(slot.articles.every((item) => item.status === "PUBLISHED")).toBe(true);
     expect(slot.week).toBe("2026-W37");
   });
 });

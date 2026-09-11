@@ -58,6 +58,7 @@ export default async function WritersDashboardPage() {
             followerCount: writer.followerCount,
             totalViews: Number(writer.totalViews ?? 0),
             pendingCount: Number(writer.pendingCount ?? 0),
+            weekUsedCount: Number(writer.weekUsedCount ?? 0),
             hasApiKey: Boolean(writer.hasApiKey),
             createdAt: writer.createdAt.toISOString(),
           }))}
