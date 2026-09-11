@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 84" fill="none" role="img" aria-label="Inkpub">
+  <defs>
+    <linearGradient id="rules" x1="7" y1="0" x2="57" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B6BFF"/>
+      <stop offset="1" stop-color="#5F36F5"/>
+    </linearGradient>
+    <linearGradient id="nib" x1="32" y1="36" x2="32" y2="84" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C9C9D6"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#rules)">
+    <rect x="7" y="0" width="50" height="7" rx="3.5"/>
+    <rect x="7" y="12" width="50" height="7" rx="3.5" opacity="0.92"/>
+    <rect x="7" y="24" width="50" height="7" rx="3.5" opacity="0.84"/>
+  </g>
+  <path fill-rule="evenodd" clip-rule="evenodd" fill="url(#nib)"
+    d="M13 36H51A6 6 0 0 1 57 42V58L32 84L7 58V42A6 6 0 0 1 13 36ZM32 44.6A5.6 5.6 0 1 0 32 55.8A5.6 5.6 0 1 0 32 44.6ZM31.05 55.5L32 80.2L32.95 55.5Z"/>
+</svg>

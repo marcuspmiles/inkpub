@@ -1,0 +1,14 @@
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Applies any pending migrations before the new version receives traffic.
+preDeployCommand = ["node", "scripts/migrate.mjs"]
+startCommand = "node server.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+numReplicas = 1
