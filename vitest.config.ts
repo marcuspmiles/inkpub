@@ -5,6 +5,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
+      // `server-only` throws on import outside a React Server Component.
+      // The modules it guards are plain Node code, so stub it for tests.
+      "server-only": resolve(__dirname, "./tests/stubs/server-only.ts"),
     },
   },
   test: {

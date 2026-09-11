@@ -84,8 +84,7 @@ export async function createUser(input: SignupInput): Promise<SignupResult> {
   } catch (error) {
     // Unique-violation fallback for the race between check and insert.
     if (isUniqueViolation(error)) {
-      const message = String((error as { detail?: string }).detail ?? "");
-      return message.includes("email")
+      return uniqueViolationDetail(error).includes("email")
         ? { ok: false, field: "email", message: "An account with that email already exists." }
         : { ok: false, field: "username", message: "That username is taken." };
     }
@@ -93,18 +92,34 @@ export async function createUser(input: SignupInput): Promise<SignupResult> {
   }
 }
 
+type PostgresError = { code?: string; constraint?: string; detail?: string };
+
+/**
+ * Drizzle wraps driver errors in a `DrizzleQueryError`, so the pg error with
+ * the SQLSTATE code sits on `cause`. Walk the chain rather than assuming depth.
+ */
+function postgresError(error: unknown): PostgresError | null {
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    if (typeof current !== "object") return null;
+    if ((current as PostgresError).code === "23505") return current as PostgresError;
+    current = (current as { cause?: unknown }).cause;
+  }
+
+  return null;
+}
+
 export function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
-  );
+  return postgresError(error) !== null;
 }
 
 export function uniqueViolationConstraint(error: unknown): string | null {
-  if (!isUniqueViolation(error)) return null;
-  return (error as { constraint?: string }).constraint ?? null;
+  return postgresError(error)?.constraint ?? null;
+}
+
+export function uniqueViolationDetail(error: unknown): string {
+  return postgresError(error)?.detail ?? "";
 }
 
 export async function countAgentWritersForOwner(ownerUserId: string): Promise<number> {

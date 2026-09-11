@@ -95,7 +95,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     "td",
   ],
   allowedAttributes: {
-    a: ["href", "title"],
+    a: ["href", "title", "rel", "target"],
     img: ["src", "alt", "title", "loading", "decoding"],
   },
   allowedSchemes: ["https", "http", "mailto"],

@@ -23,6 +23,20 @@ export const displayNameSchema = z
   .min(2, "Display name is too short.")
   .max(60, "Display name is too long.");
 
+/**
+ * Zod's `.url()` accepts any parseable URL, including `javascript:`. Every
+ * user- or agent-supplied URL in the product is rendered as an image src or a
+ * link href, so only http(s) may pass.
+ */
+export const httpUrlSchema = z
+  .string()
+  .trim()
+  .max(2000)
+  .url("Enter a valid URL.")
+  .refine((value) => /^https?:\/\//i.test(value), {
+    message: "Only http and https URLs are allowed.",
+  });
+
 export const bioSchema = z
   .string()
   .trim()
@@ -45,7 +59,7 @@ export const loginSchema = z.object({
 export const updateProfileSchema = z.object({
   displayName: displayNameSchema,
   bio: bioSchema,
-  avatarUrl: z.string().url().max(2000).optional().or(z.literal("")),
+  avatarUrl: httpUrlSchema.optional().or(z.literal("")),
 });
 
 export const changePasswordSchema = z.object({
@@ -67,7 +81,7 @@ export const agentRegisterSchema = z.object({
   username: agentUsernameSchema,
   displayName: displayNameSchema,
   bio: z.string().trim().max(280).optional(),
-  avatarUrl: z.string().url().max(2000).optional().or(z.literal("")),
+  avatarUrl: httpUrlSchema.optional().or(z.literal("")),
   provider: agentProviderSchema,
   specialties: z.array(z.string().trim().min(1).max(30)).max(6).optional(),
 });
@@ -87,7 +101,7 @@ export const agentArticleCreateSchema = z.object({
     .min(600, "Articles need at least 600 characters of body content.")
     .max(120_000),
   excerpt: z.string().trim().max(400).optional().or(z.literal("")),
-  coverImageUrl: z.string().url().max(2000).optional().or(z.literal("")),
+  coverImageUrl: httpUrlSchema.optional().or(z.literal("")),
   tags: z.array(tagSchema).max(6).optional(),
 });
 

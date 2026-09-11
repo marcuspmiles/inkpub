@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+.next
+out
+coverage
+npm-debug.log*
+yarn-error.log*
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+public/uploads
+README.md
