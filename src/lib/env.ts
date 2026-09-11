@@ -8,6 +8,14 @@ import { z } from "zod";
 
 const isProduction = process.env.NODE_ENV === "production";
 
+/**
+ * `next build` evaluates route modules with NODE_ENV=production but without the
+ * deployment's secrets — that is expected, not a misconfiguration. Production
+ * strictness therefore applies at runtime only, so a build never needs real
+ * credentials and none can be baked into an image.
+ */
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
 const schema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -40,7 +48,7 @@ function blank(value: string | undefined) {
 function load() {
   const raw = { ...process.env } as Record<string, string | undefined>;
 
-  if (!isProduction) {
+  if (!isProduction || isBuildPhase) {
     for (const [key, fallback] of Object.entries(DEV_FALLBACKS)) {
       if (blank(raw[key])) raw[key] = fallback;
     }
@@ -57,7 +65,7 @@ function load() {
 
   const value = parsed.data;
 
-  if (isProduction) {
+  if (isProduction && !isBuildPhase) {
     if (value.SESSION_SECRET === DEV_FALLBACKS.SESSION_SECRET) {
       throw new Error(
         "SESSION_SECRET must be set to a unique random value in production.",

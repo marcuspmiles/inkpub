@@ -52,19 +52,15 @@ export function AdminReviewList({
   return (
     <div className="space-y-4">
       {items.map((item) => (
-        <ReviewCard key={item.id} item={item} context={context} />
+        <ReviewCard key={item.id} item={item} />
       ))}
     </div>
   );
 }
 
-function ReviewCard({
-  item,
-  context,
-}: {
-  item: ReviewItem;
-  context: "queue" | "flagged" | "published";
-}) {
+// Every action is derived from the article's own status, so the card behaves
+// identically in all three tabs.
+function ReviewCard({ item }: { item: ReviewItem }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [notes, setNotes] = useState(item.adminNotes ?? "");

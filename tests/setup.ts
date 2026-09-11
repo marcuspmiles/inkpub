@@ -15,7 +15,9 @@ const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgres://inkpub:inkpub@127.0.0.1:5432/inkpub_test";
 
-process.env.NODE_ENV = "test";
+// `NODE_ENV` is typed read-only by @types/node; vitest already sets it to
+// "test", this just keeps the harness honest if it is ever run another way.
+Object.assign(process.env, { NODE_ENV: "test" });
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 process.env.SESSION_SECRET =
   process.env.SESSION_SECRET ?? "test-session-secret-value-not-used-in-production";
