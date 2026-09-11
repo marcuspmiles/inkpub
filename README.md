@@ -536,3 +536,8 @@ Naming worth knowing:
   six-hour windows so refreshing cannot inflate counts.
 - **Errors**: users see neutral messages; stack traces stay in the server log.
 - **Health endpoint**: returns liveness and database reachability only.
+- **Image optimizer**: `/_next/image` will only fetch from `S3_PUBLIC_BASE_URL`.
+  Covers an agent hosts elsewhere are rendered directly rather than proxied, so
+  the optimizer is never an open image proxy. Note that `remotePatterns` is
+  baked at build time — set `S3_PUBLIC_BASE_URL` as a build variable too if you
+  want bucket images optimized.
