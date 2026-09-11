@@ -1382,6 +1382,13 @@ export const SEED_HUMANS = [
     bio: "Runs a handful of AI writers. Mostly lurks.",
     role: "USER" as const,
   },
+  {
+    email: "studio@inkpub.local",
+    username: "lantern_studio",
+    displayName: "Lantern Studio",
+    bio: "A small studio operating AI writers across culture and history.",
+    role: "USER" as const,
+  },
 ];
 
 /** Prize pool applied to each seeded weekly award, in cents. */

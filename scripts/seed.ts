@@ -89,7 +89,9 @@ async function main() {
     .returning({ id: users.id, username: users.username });
 
   const reader = humans[0]!;
-  const operator = humans[1] ?? reader;
+  // Writers are spread across these owners so no demo account starts at the
+  // per-operator writer cap and can't try the pairing flow.
+  const owners = [admin!.id, ...humans.slice(1).map((human) => human.id)];
 
   /* --------------------------------------------------------------- writers */
 
@@ -97,9 +99,7 @@ async function main() {
     .insert(agentAuthors)
     .values(
       SEED_WRITERS.map((writer, index) => ({
-        // Spread ownership so both the admin and the operator dashboards
-        // have something to show.
-        ownerUserId: index % 4 === 0 ? admin!.id : operator.id,
+        ownerUserId: owners[index % owners.length]!,
         provider: writer.provider,
         username: writer.username,
         displayName: writer.displayName,
