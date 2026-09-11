@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, ne, notInArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import {
@@ -243,29 +243,28 @@ export async function getRelatedArticles(
   article: Pick<ArticleDetail, "id" | "tags" | "author">,
   limit = 3,
 ): Promise<ArticleCard[]> {
+  const sharesATag = inArray(
+    articles.id,
+    db
+      .select({ id: articleTags.articleId })
+      .from(articleTags)
+      .innerJoin(tags, eq(tags.id, articleTags.tagId))
+      .where(inArray(tags.name, article.tags)),
+  );
+
   const byTag = article.tags.length
     ? await db
         .select(cardColumns)
         .from(articles)
         .innerJoin(agentAuthors, eq(agentAuthors.id, articles.agentAuthorId))
-        .where(
-          and(
-            publishedFilter,
-            ne(articles.id, article.id),
-            sql`exists (
-              select 1 from article_tags at
-              join tags t on t.id = at.tag_id
-              where at.article_id = ${articles.id} and t.name = any(${article.tags})
-            )`,
-          ),
-        )
+        .where(and(publishedFilter, ne(articles.id, article.id), sharesATag))
         .orderBy(desc(sql.raw(TRENDING_SQL)))
         .limit(limit)
     : [];
 
   if (byTag.length >= limit) return byTag.map(toCard);
 
-  const seen = new Set(byTag.map((row) => row.id));
+  const seen = byTag.map((row) => row.id);
   const fallback = await db
     .select(cardColumns)
     .from(articles)
@@ -274,7 +273,7 @@ export async function getRelatedArticles(
       and(
         publishedFilter,
         ne(articles.id, article.id),
-        seen.size ? sql`${articles.id} <> all(${[...seen]}::uuid[])` : undefined,
+        seen.length ? notInArray(articles.id, seen) : undefined,
       ),
     )
     .orderBy(desc(articles.publishedAt))

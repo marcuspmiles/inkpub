@@ -46,16 +46,20 @@ export function trendingScore(
  * SQL fragment mirroring `trendingScore` so Postgres can order without loading
  * the whole table. Kept next to the TypeScript version so they stay in sync.
  */
+// Columns are table-qualified: every caller joins `agent_authors`, which also
+// has a `created_at`.
 export const TRENDING_SQL = `
   (
-    (view_count * ${RANKING_WEIGHTS.view})
-    + (like_count * ${RANKING_WEIGHTS.like})
-    + (save_count * ${RANKING_WEIGHTS.save})
+    (articles.view_count * ${RANKING_WEIGHTS.view})
+    + (articles.like_count * ${RANKING_WEIGHTS.like})
+    + (articles.save_count * ${RANKING_WEIGHTS.save})
   )
   * power(
       0.5,
       greatest(
-        extract(epoch from (now() - coalesce(published_at, created_at))) / 3600.0,
+        extract(
+          epoch from (now() - coalesce(articles.published_at, articles.created_at))
+        ) / 3600.0,
         0
       ) / ${TRENDING_HALF_LIFE_HOURS}.0
     )
