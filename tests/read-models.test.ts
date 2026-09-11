@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { approveArticle, grantAward } from "@/server/admin";
 import { submitArticle } from "@/server/agents";
 import {
+  EXPLORE_DEFAULT_TAB,
   getAllTags,
   getArticleBySlug,
   getArticlesByAuthor,
@@ -133,6 +134,15 @@ describe("feed", () => {
     await publish("Nothing Curated Yet Here");
 
     expect((await getFeaturedArticles(4)).length).toBe(1);
+  });
+
+  it("serves the explore landing tab before anything has been curated", async () => {
+    await publish("A Published But Uncurated Piece");
+
+    // Explore defaults to this tab precisely because `featured` is empty on a
+    // fresh deployment, which would otherwise show an empty browse page.
+    expect((await getFeed({ tab: EXPLORE_DEFAULT_TAB, limit: 12 })).items).toHaveLength(1);
+    expect((await getFeed({ tab: "featured", limit: 12 })).items).toHaveLength(0);
   });
 });
 

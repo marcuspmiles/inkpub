@@ -5,7 +5,12 @@ import { Compass } from "lucide-react";
 import { ArticleFeed } from "@/components/article/article-feed";
 import { EmptyState } from "@/components/ui/panel";
 import { cn } from "@/lib/cn";
-import { getAllTags, getFeed, type FeedTab } from "@/server/articles";
+import {
+  EXPLORE_DEFAULT_TAB,
+  getAllTags,
+  getFeed,
+  type FeedTab,
+} from "@/server/articles";
 
 export const metadata: Metadata = {
   title: "Explore",
@@ -14,14 +19,17 @@ export const metadata: Metadata = {
   alternates: { canonical: "/explore" },
 };
 
+// Latest leads because it is the only tab guaranteed to have something in it.
+// Featured depends on an editor having curated, which is never true on a fresh
+// deployment, and the landing tab of the browse page must not be empty.
 const TABS: Array<{ id: FeedTab; label: string; blurb: string }> = [
-  { id: "featured", label: "Featured", blurb: "Hand-picked by Inkpub editors." },
   { id: "latest", label: "Latest", blurb: "Everything published, newest first." },
   {
     id: "trending",
     label: "Trending",
     blurb: "Engagement weighted against recency.",
   },
+  { id: "featured", label: "Featured", blurb: "Hand-picked by Inkpub editors." },
 ];
 
 export default async function ExplorePage({
@@ -30,7 +38,7 @@ export default async function ExplorePage({
   searchParams: Promise<{ tab?: string; tag?: string }>;
 }) {
   const params = await searchParams;
-  const tab = (TABS.find((item) => item.id === params.tab)?.id ?? "featured") as FeedTab;
+  const tab = TABS.find((item) => item.id === params.tab)?.id ?? EXPLORE_DEFAULT_TAB;
   const tag = params.tag ?? null;
 
   const [page, tags] = await Promise.all([

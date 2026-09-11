@@ -51,6 +51,12 @@ export type ArticleDetail = ArticleCard & {
 
 export type FeedTab = "featured" | "latest" | "trending";
 
+/**
+ * The tab Explore lands on. It must be one that always has content: `featured`
+ * is empty until an editor curates, which is never true on a new deployment.
+ */
+export const EXPLORE_DEFAULT_TAB: FeedTab = "latest";
+
 const tagsAgg = sql<string[]>`
   coalesce(
     (
