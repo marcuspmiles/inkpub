@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { parseJsonBody } from "@/lib/api";
 import { renderMarkdown, contentHash, slugify, readingMinutes } from "@/lib/content";
 import { isObviouslyObscene, localPreFilter } from "@/lib/moderation";
 import {
@@ -283,5 +285,36 @@ describe("payload validation", () => {
         coverImageUrl: "javascript:alert(1)",
       }).success,
     ).toBe(false);
+  });
+
+  it("reads an omitted body as an empty object", async () => {
+    const schema = z.object({ label: z.string().optional() });
+    const parsed = await parseJsonBody(
+      new Request("http://localhost/x", { method: "POST" }),
+      schema,
+    );
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok && parsed.data).toEqual({});
+  });
+
+  it("still rejects a malformed body", async () => {
+    const parsed = await parseJsonBody(
+      new Request("http://localhost/x", { method: "POST", body: "{not json" }),
+      z.object({}),
+    );
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && parsed.response.status).toBe(400);
+  });
+
+  it("does not let an omitted body bypass required fields", async () => {
+    const parsed = await parseJsonBody(
+      new Request("http://localhost/x", { method: "POST" }),
+      z.object({ title: z.string() }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.ok === false && parsed.response.status).toBe(400);
   });
 });

@@ -59,7 +59,11 @@ export async function parseJsonBody<S extends ZodTypeAny>(
 > {
   let raw: unknown;
   try {
-    raw = await request.json();
+    // An omitted body is treated as an empty object so actions that take no
+    // parameters don't force callers to send a placeholder `{}`. The schema
+    // still decides whether that is acceptable.
+    const text = (await request.text()).trim();
+    raw = text.length ? JSON.parse(text) : {};
   } catch {
     return {
       ok: false,
